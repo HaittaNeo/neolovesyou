@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>neo loves you</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100svh;
+      display: grid;
+      place-content: center;
+      background: #000;
+    }
+
+    main {
+      width: min(92vw, 1080px);
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+      align-items: center;
+      gap: 16px;
+      padding: 16px 0 24px;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+    }
+
+    #flowers {
+      height: min(69svh, 660px);
+      touch-action: pan-y;
+      cursor: grab;
+    }
+
+    #flowers:active {
+      cursor: grabbing;
+    }
+
+    #me {
+      max-width: 400px;
+      aspect-ratio: 540 / 552;
+      margin-inline: auto;
+    }
+
+    @media (max-width: 740px) {
+      main {
+        width: min(92vw, 650px);
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="flowers" role="img"></canvas>
+    <canvas id="me" role="img"></canvas>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('flowers');
+    const ctx = canvas.getContext('2d');
+    const flowerGlyphs = '·:=+*';
+    const fullTurn = 2 * Math.PI;
+    const points = [];
+    const palette = {
+      stem: ['#355843', '#608b59', '#9fb875'],
+      paper: ['#593b46', '#91606d', '#c08f95'],
+      ribbon: ['#a23b64', '#e66f98', '#ffacc2'],
+      petal: ['#a91d3b', '#f33558', '#ff7986'],
+      filament: ['#bb3b56', '#ff6d83', '#ff9caa'],
+      pollen: ['#ed8b7a', '#ffbd99', '#ffe1ae']
+    };
+
+    function sizeCanvas(canvas, context, width, height, cellHeight) {
+      const pixelRatio = window.devicePixelRatio || 1;
+      canvas.width = Math.round(width * pixelRatio);
+      canvas.height = Math.round(height * pixelRatio);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.font = `600 ${cellHeight * 0.98}px monospace`;
+      context.textBaseline = 'middle';
+    }
+
+    function drawGlyph(context, glyphs, col, row, cellWidth, cellHeight) {
+      const glyph = glyphs[(row * 7 + col * 13) % glyphs.length];
+      context.fillText(glyph, col * cellWidth, (row + 0.5) * cellHeight);
+    }
+
+    function addPoint(x, y, z, material, seed) {
+      const colors = palette[material];
+      points.push({ x, y, z, color: colors[Math.abs(seed) % colors.length] });
+    }
+
+    function addCurve(material, steps, position) {
+      for (let i = 0; i <= steps; i++) {
+        addPoint(...position(i / steps), material, i);
+      }
+    }
+
+    const flowers = [
+      [-1.65, 2.1, 0.25, 0.55],
+      [-0.7, 2.86, -0.55, 0.83],
+      [0.72, 2.62, 0.68, 1.1],
+      [1.62, 1.77, -0.31, 0.66],
+      [-0.61, 1.45, 1.05, 0.91],
+      [0.32, 3.18, -0.28, 0.75],
+      [0.44, 1.69, -1.06, 0.83]
+    ];
+
+    flowers.forEach(([x, y, z, phase], index) => {
+      addCurve('stem', 150, t => [x * t ** 2, -2.7 + (y + 2.7) * t, z * t ** 2]);
+      for (let petal = 0; petal < 6; petal++) {
+        const bearing = petal * fullTurn / 6 + phase;
+        const size = 0.78 + 0.14 * Math.sin(index * 3 + petal);
+        for (let side = -3; side <= 3; side++) {
+          addCurve('petal', 49, t => {
+            const a = bearing + 0.34 * t ** 2;
+            const r = size * (1.46 * t - 0.58 * t ** 4);
+            const width = side * 0.037 * Math.sin(Math.PI * t) * (1 + 0.2 * Math.sin(37 * t));
+            const height = size * (0.43 * Math.sin(Math.PI * t) - 0.26 * t ** 2 + 0.12 * t ** 9);
+            return [
+              x + Math.cos(a) * r - Math.sin(a) * width,
+              y + height + 0.05 * Math.sin(37 * t) * (side / 3) ** 2,
+              z + Math.sin(a) * r + Math.cos(a) * width
+            ];
+          });
+        }
+
+        function stamen(t) {
+          const a = bearing + 0.22 + 0.17 * t;
+          const r = size * (1.37 * t ** 1.55);
+          return [x + Math.cos(a) * r, y + size * (1.33 * t - 0.66 * t ** 2), z + Math.sin(a) * r];
+        }
+
+        addCurve('filament', 60, stamen);
+        const [sx, sy, sz] = stamen(1);
+        addCurve('pollen', 10, t => [
+          sx + (t - 0.5) * 0.095 * Math.cos(bearing),
+          sy + 0.022 * Math.sin(t * Math.PI),
+          sz + (t - 0.5) * 0.095 * Math.sin(bearing)
+        ]);
+      }
+    });
+
+    for (let row = 0; row <= 105; row++) {
+      const t = row / 105;
+      const radius = 0.18 + 1.19 * t ** 1.22;
+      for (let col = 0; col < 178; col++) {
+        const a = col * fullTurn / 178;
+        const scallop = (0.2 * Math.cos(3 * a) + 0.12 * Math.sin(a)) * t ** 4;
+        const stripe = Math.floor(col / 9) + Math.floor(row / 9);
+        addPoint(radius * Math.cos(a), -1.89 + 2.58 * t + scallop, radius * 0.76 * Math.sin(a), 'paper', stripe);
+      }
+    }
+
+    for (let band = 0; band < 7; band++) {
+      addCurve('ribbon', 90, t => [
+        0.28 * Math.cos(t * fullTurn),
+        -1.66 + band * 0.022,
+        0.23 * Math.sin(t * fullTurn)
+      ]);
+    }
+
+    for (const side of [-1, 1]) {
+      for (let band = 0; band < 5; band++) {
+        addCurve('ribbon', 75, t => [
+          side * 0.62 * Math.sin(Math.PI * t),
+          -1.6 + 0.27 * Math.sin(t * fullTurn) + band * 0.019,
+          0.24 + 0.19 * Math.sin(Math.PI * t)
+        ]);
+        addCurve('ribbon', 45, t => [
+          side * (0.44 * t + band * 0.017),
+          -1.65 - 0.72 * t,
+          0.25 + 0.085 * Math.sin(t * fullTurn)
+        ]);
+      }
+    }
+
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    let angle = 0.24;
+    let drag = null;
+    let width, height, cols, rows, cellWidth, cellHeight;
+    let depths, cellColors;
+    let frameId = null;
+    let previousTime = null;
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      cellWidth = width < 420 ? 3.7 : 5.2;
+      cellHeight = cellWidth * 1.43;
+      cols = Math.ceil(width / cellWidth);
+      rows = Math.ceil(height / cellHeight);
+      depths = new Float64Array(cols * rows);
+      cellColors = Array(depths.length);
+      sizeCanvas(canvas, ctx, width, height, cellHeight);
+      draw();
+    }
+
+    function draw() {
+      if (!depths) return;
+      depths.fill(-Infinity);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const scale = Math.min(width / 5.7, height / 7.4);
+      for (const point of points) {
+        const x = point.x * cos + point.z * sin;
+        const z = point.z * cos - point.x * sin;
+        const perspective = 10 / (10 - z);
+        const col = Math.floor((width * 0.5 + x * scale * perspective) / cellWidth);
+        const row = Math.floor((height * 0.54 - (point.y * 0.99 - z * 0.12) * scale * perspective) / cellHeight);
+        if (col < 0 || col >= cols || row < 0 || row >= rows) continue;
+        const i = row * cols + col;
+        if (z > depths[i]) {
+          depths[i] = z;
+          cellColors[i] = point.color;
+        }
+      }
+      ctx.clearRect(0, 0, width, height);
+      for (let i = 0; i < depths.length; i++) {
+        if (depths[i] === -Infinity) continue;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        ctx.fillStyle = cellColors[i];
+        drawGlyph(ctx, flowerGlyphs, col, row, cellWidth, cellHeight);
+      }
+    }
+
+    function animate(time) {
+      if (previousTime !== null) {
+        const elapsed = Math.min(time - previousTime, 50);
+        angle = (angle + elapsed * fullTurn / 14000) % fullTurn;
+      }
+      previousTime = time;
+      draw();
+      frameId = requestAnimationFrame(animate);
+    }
+
+    function syncAnimation() {
+      if (!reducedMotion.matches && drag === null) {
+        if (frameId === null) frameId = requestAnimationFrame(animate);
+      } else if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+        previousTime = null;
+      }
+    }
+
+    reducedMotion.addEventListener('change', syncAnimation);
+
+    canvas.addEventListener('pointerdown', event => {
+      if (drag || !event.isPrimary || event.button !== 0) return;
+      canvas.setPointerCapture(event.pointerId);
+      drag = { pointerId: event.pointerId, x: event.clientX };
+      syncAnimation();
+    });
+
+    canvas.addEventListener('pointermove', event => {
+      if (drag?.pointerId !== event.pointerId) return;
+      angle = (angle + (event.clientX - drag.x) * 0.013) % fullTurn;
+      drag.x = event.clientX;
+      draw();
+    });
+
+    canvas.addEventListener('lostpointercapture', event => {
+      if (drag?.pointerId !== event.pointerId) return;
+      drag = null;
+      syncAnimation();
+    });
+
+    new ResizeObserver(resize).observe(canvas);
+    syncAnimation();
+
+    const sticker = document.getElementById('me');
+    const stickerContext = sticker.getContext('2d');
+    const stickerGlyphs = '.:=+*';
+    const colorCodes = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const stickerPalette = [
+      '#322a35', '#484048', '#60525a', '#786a74', '#9a8994', '#bfaeb8',
+      '#e2d9df', '#fff2f1', '#294756', '#385866', '#496b80', '#628aa0',
+      '#7da5bf', '#9cc8e0', '#bce5fc', '#e7f8ff', '#593038', '#803941',
+      '#a33842', '#c63544', '#e84957', '#f3737b', '#f69c9e', '#ffc1c0',
+      '#ffe1d8', '#b98280', '#caa49f', '#455d4e', '#65836a', '#372b30',
+      '#513338'
+    ];
+    const stickerRows = [
+      '',
+      '',
+      '',
+      '............................DMML....CNE....BLLLcKKbB',
+      '..........................BBbCLMNE.CNOOCBLNOOOOOOONMLLLKB',
+      '............................CcLcDOcLNOOLMOOOOOOOOOOONMMMMKb',
+      '..........................MNOOOONMNONNOMMONNNOOOOOOOOONMMMMLKB',
+      '........................CNOOOOOONMNOONOMNOOOOOOOOOONOOOONMMMMMKB',
+      '.......................EOOOOOOONOMOOONOMNOOOPOOOOOOOOOOOOONMMMMLLC',
+      '.....................BFPPOOOONNOMNOOOONMNOOPPPOOOOOOOOOONOOOMMMMMMK',
+      '....................CGPPPOOONONOMOOOONOLOOOOOOOOOOOOOOOOONNOOMMMMMMLB',
+      '...................CGPPPPOONONONOOOOONNNOONOOOOOOOOOOOOOOONMNOMMMMMMLb',
+      '..................BFPPPPPONONMOMOOOOOOMOOONOOOOOOOOOOOOOOOONMMNMMMMMMML',
+      '.................BFPPPPPONOMNNONOOOONMOPPPONOOOOONNOOOOOOOOOOMMNMMMMMMMLB..Q',
+      '.............E...EPPPPPPOOMNOONNOOONMNPPPPPMOOOOOOOMOOOOOOOOOOMMMMMMMMMMCCRD.CRD',
+      '................cPPPPPPPONOPPPMOOOMMNOPPPPONOOOOOOOOMMOOOOOOOONMDMCMMMMMDDeD.RQQC.C',
+      '...............CPPPPPPPONGPPPPFNNMNONOOPPPOONOOOOOOOONLOOOOOOOENKMDMMMMMDDKRCQ.R.RR',
+      '...............FPPPPGPNONGGPPPGNOPPPNOOOOOOOEOOOOOOOOONMOOOOOFEOEMCMMMMMDLDeRCR.RC',
+      '..............CPPPPGPPNOMPGPPPOMOPPONOOOOOOOFMOOOOOOOOOMMNOOODNENLCMMMMMDLCCRCCR',
+      '..............EPPPPGOONOLONPOOONNOOONOOOOOOOEZNOOOOOOOOOMMOOFMEEMELDMMMMLSSRSSR.CRR',
+      '.............BPPPPGOOONONONOOOOONNOONOOOOOOOEaEOOOOOOOOOOMLOEEEDEDMCMLDDRRSSBQRSSSSTTR...CDQ',
+      '.............EPPPPMOOONOOOEOOOOOONNONOOOOOOOEXXEOOOOONNOONMMOEEDDCRSRSDDTRSTSRTZaEGZRSC.CQRCQ',
+      '.............FPPPOMNOONOOOENOOOONOOONOOOOOOOEGHFaNOOOOMNOOMLOOEEDQRTTSLRSSSSSSTTaHHZR..QRDRCCC',
+      '............CPPOOOMNOONOOOEEOOOONOOONNOOOOONZHHHXaFNNNNMMNNMMOOODCQRSTDSTSTTTRRSTTZS.QRTSCRRCRDD',
+      '............LOOOOOLNOONOOOEaFOOONOOONNOOONNMFGFFGFEENOOOMMOMMNOFTRSRSSSTDMDTSGGHGaSSQSTTSRDDDDRC',
+      '............MOOOOOLONOOOOOEaZOOONOOOMNOOMNNEFGYHHGECdBLMNMMMMMOMTDDRTSSTTLMCCLFGGFSRSSSSRDRC',
+      '...........BNOOOOOLOOOONONZYGEOONOOOMNOONONFHHHEdAAAAAAABbbIKCSSDDEEZTEcCCLCCDLLLKRSRRSSR..DRRRRR',
+      '...........MOOOOOOLOONOOOEaHHXFONNOOLOOONOEHHYBAAAIJKKKKEBADaSZNLCMFHSTFEBTTSTSLbcMDTTTTTSRRC',
+      '..........cOOOOOONMNOONONaGFFGGNMNOFaNOOOMHHGCAAKKKKKKKKEEFHHGDTSLDEFZRSaSRbLCDFGaTTaGZDTTTTR',
+      '.........cOOOONOONMMOOONFNMFHHHGLONaHFFOOOHGFBFEKKKAAJLKcGHHHHDDSTTTTSQSRQbbbSGHHGaTGGSSSRSTR..E',
+      '.....cEMNOOOONOOOOMLNOMEFFFFGHHHGNaYHHYGNNNFEGGEKLNIIMPHGYYHHHDDDDEaZSRSSRBbSScMMFFZSSTR',
+      '.....cNNOONMDNOONOOKEEFYGFFFGHHHFFYHHHHHHHHHHHHPKMOPPPPMGYYYYGMMMLSTSRQSbSSSTCKHGECTTTTD',
+      '........BB...NOONMNNGHGFBAAAAABCFHHHHHHHHHHHYYYHHMNOFFFXXYYYYMMDSTTSDCSTLLSRTSRZSZUTTSQRRRQRRRRRRRC',
+      '.............NOOOMLMOGFAAIKKKKKKJDYHHHHYYYYYYYYYXFFFXXXXXXYYELESTZZZCCTSLLSSSRSRSTTTTSaRSDRRRZDDDRR',
+      '.............NNOOOMMbFAAEFLKKKKAAFGYYYYYYYYYYYXXXXXXXXXXXXFEaXFZGHEbbbDSSSTSSRSSTZGZRTSTSRDRRCRRRRRC',
+      '.............NNOOOONLKAAEGEKKLNLMPFYYYYYYYXXXXXXXXXXXXXYYYYYHHHHHEbbMMMCTSRRCSTRSTTGZSQ...RDDRRRR',
+      '............cOMNONNOOLLGYGHGLLNPPFFYXXXXXXXXXXXXXYYYYYYYYYHHHHHHcKbKMMDTR...RZTZZTTZaZR.....RRRRRR',
+      '............NMbcOOMMOONLYYYYYYFaFYXXXXXXXYYYYYYYYYYYYGYHFHHHHHHDKbLLLCSR....RZTDRSSCRC........RR',
+      '..........Bcc...cOOMLMMMDFFXYXXXXXXXXXXYYYYYYYYYYYHHHHGGHHHHGFDKbLcKMMMK....RTSZCRRR',
+      '.................CMONLMMMEXXYXXXXXYYYYYYYYYYYYHHHHHHHHHHHHHFGHEbDcFFLMMLB...RBRRRCRRRQ',
+      '...................bMNMLMLYYYYYYYYYYYYYYHHHHHHGHHHHHHHHHHHFHHYbEEHHHDLMMLB......CRRRQRDR',
+      '.....................cMMLLEYYYYYYYYHHHHHHHGGHHYHHHHHHHHHGEHHHEEFFGHHE.KKLKKB.......R..C',
+      '.....................KMMMMLGYYHHHHHHHHHHHHHHHHHHHHHHHGFFLEHYFDGHHHHHFd',
+      '....................bMMMLLMLFHHHHHHHHHHHHHHHHHHHHHGFEEFDMLMEcGGHHHHHFB',
+      '..................bKLLLb.bLMMLFHHHHHHHHHHHHHHHGFaZZFDFELMMJEcHHHHHGFB',
+      '..........................KMMMMLMFFFFFFFGFEEEEEFFFFFEEMMLBBbbGGHHYFCB',
+      '..........................BMMKbLMLLMMMMLFFaaFGEFFFFDLMLEbBBbDFFHYEB',
+      '..........................KLJ...KK.bMMMLYHHGHHFGGGFLMFGEDdBbACEED',
+      '.........................Cb.....B..bMMMcEHGHHHGFFGFMPHHGaCbAAAAd',
+      '.................................DBBLMLAEFGHHHHGFHFMHHHHFZbCBBd',
+      '.................................BLKKbAABDHHHHHHHHHEPHHHHFbC',
+      '..................................CdBBBdDFHHHHHHHHHHHHHHGEcC',
+      '...................................BdBCEFFFHHHHHHHHHHHGGHFcA',
+      '....................................BBFHHGHGHHHHHHHHHFGGGFEB',
+      '....................................BEGHHFGGGHHHHHHHFHGGGGGB',
+      '.....................................EEHHFHHGHHHHHHGHHHHHHGB',
+      '......................................CEGCEGYGHHHHHGHHHGECAA',
+      '.........................................BdABBCFFEDDCBAdAAAB',
+      '.........................................dBBBddCDCddBBBBBAAB',
+      '.........................................BBBBdAdBBBBBBBBBAA',
+      '..........................................BBBBBdAAAddBBBBAA',
+      '..........................................BBBBBBBdABBBBBBAA',
+      '...........................................BBBBBBBABBBBBdAA',
+      '...........................................BBBBBBBdBBBBBdAC',
+      '............................................BBBBBBBBBBBBAA',
+      '............................................BBBBBdBBBBBdddB',
+      '............................................BBBBBdBBBBBBBA',
+      '.............................................BdddAdBBBddAC',
+      '..............................................AddAAdddddd',
+      '...............................................dddAdddddd',
+      '................................................CdBddAAd',
+      '',
+      '',
+      ''
+    ];
+
+    const stickerColumns = Math.max(...stickerRows.map(row => row.length));
+
+    function drawSticker([{ contentRect }]) {
+      const { width, height } = contentRect;
+      const cellWidth = width / stickerColumns;
+      const cellHeight = height / stickerRows.length;
+
+      sizeCanvas(sticker, stickerContext, width, height, cellHeight);
+
+      for (const [row, line] of stickerRows.entries()) {
+        for (let col = 0; col < line.length; col++) {
+          const colorIndex = colorCodes.indexOf(line[col]);
+          if (colorIndex < 0) continue;
+          stickerContext.fillStyle = stickerPalette[colorIndex];
+          drawGlyph(stickerContext, stickerGlyphs, col, row, cellWidth, cellHeight);
+        }
+      }
+    }
+
+    new ResizeObserver(drawSticker).observe(sticker);
+  </script>
+</body>
+</html>
