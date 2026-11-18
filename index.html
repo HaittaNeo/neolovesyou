@@ -182,6 +182,7 @@
     }
 
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const touchPrimary = matchMedia('(pointer: coarse)');
     let angle = 0.24;
     let drag = null;
     let width, height, cols, rows, cellWidth, cellHeight;
@@ -235,7 +236,8 @@
     function animate(time) {
       if (previousTime !== null) {
         const elapsed = Math.min(time - previousTime, 50);
-        angle = (angle + elapsed * fullTurn / 14000) % fullTurn;
+        const rotationDuration = reducedMotion.matches ? 28000 : 14000;
+        angle = (angle + elapsed * fullTurn / rotationDuration) % fullTurn;
       }
       previousTime = time;
       draw();
@@ -243,7 +245,8 @@
     }
 
     function syncAnimation() {
-      if (!reducedMotion.matches && drag === null) {
+      const shouldRotate = !reducedMotion.matches || touchPrimary.matches;
+      if (shouldRotate && drag === null) {
         if (frameId === null) frameId = requestAnimationFrame(animate);
       } else if (frameId !== null) {
         cancelAnimationFrame(frameId);
@@ -253,6 +256,7 @@
     }
 
     reducedMotion.addEventListener('change', syncAnimation);
+    touchPrimary.addEventListener('change', syncAnimation);
 
     canvas.addEventListener('pointerdown', event => {
       if (drag || !event.isPrimary || event.button !== 0) return;
@@ -268,11 +272,15 @@
       draw();
     });
 
-    canvas.addEventListener('lostpointercapture', event => {
+    function endDrag(event) {
       if (drag?.pointerId !== event.pointerId) return;
       drag = null;
       syncAnimation();
-    });
+    }
+
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+    canvas.addEventListener('lostpointercapture', endDrag);
 
     new ResizeObserver(resize).observe(canvas);
     syncAnimation();
