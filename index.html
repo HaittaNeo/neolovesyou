@@ -245,7 +245,8 @@
     }
 
     function syncAnimation() {
-      const shouldRotate = !reducedMotion.matches || touchPrimary.matches;
+      const hasTouch = touchPrimary.matches || navigator.maxTouchPoints > 0;
+      const shouldRotate = !reducedMotion.matches || hasTouch;
       if (shouldRotate && drag === null) {
         if (frameId === null) frameId = requestAnimationFrame(animate);
       } else if (frameId !== null) {
